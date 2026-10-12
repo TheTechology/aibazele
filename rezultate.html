@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rezultatele grupei · Cum învață AI? · FPED</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body class="dash">
+<header class="top"><div class="topin" style="max-width:1180px">
+  <div id="brand"></div>
+  <span style="margin-left:auto"></span>
+  <a class="btn" href="index.html" style="text-decoration:none;padding:.45rem .9rem;font-size:.88rem">Activitatea</a>
+</div></header>
+<main>
+  <p class="part" id="mod"></p>
+  <h1>Rezultatele grupei</h1>
+  <p class="lead">Practica realizată pe baza prezentării „Tema 1 – Bazele AI”. Alegeți o activitate din listă ca să vedeți ce au răspuns profesorii.</p>
+
+  <div class="toolbar">
+    <span class="pill" id="src">Se încarcă…</span>
+    <label>Nivel <select id="fLevel"><option value="">toate</option></select></label>
+    <label>Vechime <select id="fYears"><option value="">toate</option></select></label>
+    <label><input type="checkbox" id="live" checked> actualizare la 30 s</label>
+    <button class="btn" type="button" id="refresh" style="padding:.4rem .9rem">Actualizează</button>
+    <span style="margin-left:auto"></span>
+    <button class="btn" type="button" id="keyBtn" style="padding:.4rem .9rem">Vedere formator</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="cols">
+    <section class="card">
+      <h2 style="font-size:1.3rem">Cum s-a ajuns la răspuns, pe activități</h2>
+      <div class="qbars" id="qbars"></div>
+    </section>
+    <section class="card detail" id="detail" aria-live="polite"></section>
+  </div>
+
+  <div class="split">
+    <section class="card"><h2 style="font-size:1.3rem">Activități rezolvate din prima</h2><div class="hist" id="hist"></div></section>
+    <section class="card"><h2 style="font-size:1.3rem">Pe părți ale prezentării</h2><div class="parts" id="partsBox"></div></section>
+  </div>
+
+  <section class="card" id="people" style="margin-top:1.2rem" hidden>
+    <h2 style="font-size:1.3rem">Cursanții</h2>
+    <p class="hint" style="margin-top:-.3rem">Vizibil doar în vederea formatorului. Apăsați pe un rând pentru parcursul complet.</p>
+    <div class="tblwrap"><table class="tbl" id="tbl"></table></div>
+    <div class="row" style="margin-top:.8rem;display:flex;gap:.6rem"><button class="btn" type="button" id="csv" style="padding:.4rem .9rem">Descarcă tabelul (CSV)</button></div>
+  </section>
+
+  <p class="foot" id="foot"></p>
+</main>
+<dialog id="dlg"><div id="dlgBody"></div><form method="dialog" style="margin-top:1rem"><button class="btn">Închide</button></form></dialog>
+
+<script src="assets/config.js"></script>
+<script src="assets/content.js"></script>
+<script>
+const C=window.APP_CONFIG,$=s=>document.querySelector(s);
+$("#brand").innerHTML=headerHTML();
+$("#mod").textContent=C.MODULE;
+$("#foot").innerHTML=`${esc(C.COURSE)} · ${esc(C.GROUP)} · ${esc(C.PERIOD)}<br>Formator: ${esc(C.TRAINER)}`;
+LEVELS.forEach(l=>$("#fLevel").insertAdjacentHTML("beforeend",`<option>${esc(l)}</option>`));
+YEARS.forEach(y=>$("#fYears").insertAdjacentHTML("beforeend",`<option>${esc(y)}</option>`));
+const isScored=q=>q.type!=="fill"&&q.type!=="open";
+let ALL=[],FULL=false,DEMO=false,sel=0,KEYV="";
+try{KEYV=sessionStorage.getItem("fped-key")||""}catch(e){}
+
+/* ---------- date demonstrative (doar când ENDPOINT lipsește) ---------- */
+function correctAnswer(q){if(q.type==="single")return q.c;if(q.type==="multi")return q.c.slice();if(q.type==="order")return[0,1,2,3];if(q.type==="classify"){const a={};q.o.forEach((it,i)=>a[i]=it[1]);return a}}
+function demoRows(){
+  const names=["Ana P.","Ioana M.","Elena D.","Maria C.","Gabriela S.","Cristina R.","Mihaela T.","Daniela V.","Raluca B.","Simona G.","Adriana L.","Carmen N."];
+  const fillW=[["rezultatele","comportamentul","viitorul","sănătatea","rezultatele"],["ajutor","feedback","o notă bună","sprijin","feedback"],["elevii","timpul","tehnologia","elevii","timpul"]];
+  const opens=["Nu, doar calculează probabilități.","Pentru că pe forumuri sunt multe exagerări și informații false.","Le verificăm în programă și în manual înainte de a le folosi.","Nu știe, dar sună foarte convingător.","Le folosim ca punct de plecare, nu ca adevăr."];
+  let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+  return names.map((n,k)=>{
+    const skill=.45+rnd()*.5,ans={};const c={first:0},per={1:[0,0],2:[0,0]};let tot=0;
+    Q.forEach(q=>{let a=null,first=null,out="reflect",tries=0;
+      if(isScored(q)){tot++;per[q.part][1]++;a=correctAnswer(q);const r=rnd();
+        if(r<skill){out="first";first=a;tries=1}else{out=rnd()<.75?"retry":"explained";tries=out==="retry"?2:2;
+          if(q.type==="single")first=(q.c+1)%q.o.length;else if(q.type==="multi")first=[q.c[0]];else if(q.type==="order")first=[1,0,2,3];else{first={};q.o.forEach((it,i)=>first[i]=i===0?q.cats.find(x=>x!==it[1]):it[1])}}
+        if(out==="first"){c.first++;per[q.part][0]++}}
+      if(q.type==="fill")a={f:fillW.map(w=>w[Math.floor(rnd()*w.length)]),x:"Din context și din experiența de la clasă."};
+      if(q.type==="open"){a={};q.o.forEach((_,i)=>a[i]=opens[Math.floor(rnd()*opens.length)])}
+      ans[q.id]={a,first,tries,out}});
+    return{id:"demo"+k,ts:new Date(Date.now()-k*240000).toISOString(),name:n,email:"",disc:"CLR, matematică, clasa a "+["I","II","III","IV"][k%4]+"-a",
+      level:k%5===4?"Gimnaziu":LEVELS[0],years:YEARS[k%4],score:c.first,max:tot,pct:Math.round(c.first/tot*100),p1:per[1][0],p1max:per[1][1],p2:per[2][0],p2max:per[2][1],answers:ans};
+  });
+}
+
+/* ---------- încărcare ---------- */
+async function load(){
+  if(!C.ENDPOINT){DEMO=true;FULL=true;ALL=demoRows();$("#src").className="pill demo";$("#src").textContent="Date demonstrative · completați ENDPOINT în assets/config.js";draw();return}
+  try{
+    const r=await fetch(C.ENDPOINT+"?t="+Date.now()+(KEYV?"&key="+encodeURIComponent(KEYV):""));
+    const d=await r.json();ALL=d.rows||[];FULL=!!d.complet;
+    if(KEYV&&!FULL){KEYV="";try{sessionStorage.removeItem("fped-key")}catch(e){}alert("Cheia nu este corectă. Se afișează vederea publică.")}
+    $("#src").className="pill live";$("#src").textContent=`Date live · ${ALL.length} parcursuri · ${new Date().toLocaleTimeString("ro-RO",{hour:"2-digit",minute:"2-digit"})}`;
+    draw();
+  }catch(e){$("#src").className="pill";$("#src").textContent="Datele nu s-au încărcat încă. Verificați ENDPOINT și conexiunea."}
+}
+function rows(){const l=$("#fLevel").value,y=$("#fYears").value;return ALL.filter(r=>(!l||r.level===l)&&(!y||r.years===y))}
+
+/* ---------- statistici: din prima / după reluare / cu explicația ---------- */
+function qStat(q,R){const c={first:0,retry:0,explained:0,n:0};R.forEach(r=>{const x=r.answers&&r.answers[q.id];if(x&&c[x.out]!==undefined){c[x.out]++;c.n++}});return c}
+const pc=(a,b)=>b?Math.round(a/b*100):0;
+
+function draw(){
+  const R=rows(),n=R.length;
+  const avg=n?Math.round(R.reduce((a,r)=>a+(+r.pct||0),0)/n):0;
+  const st=Q.filter(isScored).map(q=>[q,qStat(q,R)]).filter(x=>x[1].n);
+  const easy=st.slice().sort((a,b)=>pc(b[1].first,b[1].n)-pc(a[1].first,a[1].n))[0],deep=st.slice().sort((a,b)=>pc(a[1].first,a[1].n)-pc(b[1].first,b[1].n))[0];
+  const retries=st.reduce((a,x)=>a+x[1].retry,0);
+  $("#kpis").innerHTML=`
+   <div><b>${n}</b><span>profesori au parcurs activitatea</span></div>
+   <div><b>${n?avg+"%":"–"}</b><span>activități rezolvate din prima, în medie</span></div>
+   <div><b>${retries}</b><span>reluări reușite: învățare în acțiune</span></div>
+   <div><span>Merită aprofundat împreună</span><small>${deep?esc(deep[0].t):"–"}</small></div>`;
+  $("#qbars").innerHTML=`<div class="keyrow"><span><i style="background:var(--green)"></i>din prima</span><span><i style="background:var(--blue)"></i>după reluare</span><span><i style="background:var(--yellow)"></i>cu explicația</span></div>`+
+   Q.map((q,i)=>{const sc=isScored(q),c=qStat(q,R);
+    return`<button type="button" class="qbar" data-i="${i}" aria-current="${i===sel}"><span class="n">${i+1}</span><span class="lab">${esc(q.t)}${sc?`<span class="stack" style="margin-top:.3rem;height:8px"><i class="s1" style="width:${pc(c.first,c.n)}%"></i><i class="s2" style="width:${pc(c.retry,c.n)}%"></i><i class="s3" style="width:${pc(c.explained,c.n)}%"></i></span>`:`<span class="tr"></span>`}</span><span class="v">${sc?(c.n?pc(c.first,c.n)+"%":"–"):'<span class="pill" style="font-size:.7rem">reflecție</span>'}</span></button>`}).join("");
+  drawDetail(R);
+  const b=[0,0,0,0,0],lab=["0–39%","40–59%","60–74%","75–89%","90–100%"];
+  R.forEach(r=>{const p=+r.pct||0;b[p<40?0:p<60?1:p<75?2:p<90?3:4]++});const mx=Math.max(1,...b);
+  $("#hist").innerHTML=b.map((v,i)=>`<div><b>${v}</b><i style="height:${v/mx*100}%"></i><span>${lab[i]}</span></div>`).join("");
+  $("#partsBox").innerHTML=[1,2].map(k=>{let g=0,m=0;R.forEach(r=>{g+=+r["p"+k]||0;m+=+r["p"+k+"max"]||0});const p=pc(g,m);
+    return`<div class="pbar"><span>${esc(PARTS[k])}</span><span>${m?p+"%":"–"}</span><div class="tr"><i style="width:${p}%"></i></div></div>`}).join("")+
+    `<p class="hint" style="margin-top:1rem">Procent rezolvat din prima încercare. Partea 1 acoperă slide-urile 3–11, partea 2 slide-urile 12–22. Toți cursanții ajung la răspuns, prin reluare sau cu explicația.</p>`;
+  $("#people").hidden=!FULL;
+  if(FULL){
+    const sorted=R.slice().sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+    $("#tbl").innerHTML=`<thead><tr><th>Nume</th><th>Nivel</th><th>Discipline și clase</th><th>Vechime</th><th>Din prima</th><th>Ora</th></tr></thead><tbody>${sorted.map(r=>`<tr class="click" data-id="${esc(r.id)}" tabindex="0"><td>${esc(r.name)}</td><td>${esc(String(r.level||"").replace(" (învățător/învățătoare)",""))}</td><td>${esc(r.disc)}</td><td>${esc(r.years)}</td><td><b>${esc(r.score)}</b> din ${esc(r.max)}</td><td>${esc(new Date(r.ts).toLocaleString("ro-RO",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}))}</td></tr>`).join("")}</tbody>`;
+  }
+}
+const WC=["var(--green)","var(--blue)","var(--ink)","var(--soft)"];
+function cloud(list){const c={};list.forEach(w=>{w=String(w||"").trim().toLowerCase();if(w)c[w]=(c[w]||0)+1});const e=Object.entries(c).sort((a,b)=>b[1]-a[1]);if(!e.length)return'<p class="empty">Încă nu sunt răspunsuri.</p>';const mx=e[0][1];
+  return`<div class="wcloud">${e.slice(0,25).map(([w,n],i)=>`<span title="${n} răspunsuri" style="font-size:${(.95+1.6*n/mx).toFixed(2)}rem;color:${WC[i%4]}">${esc(w)}</span>`).join("")}</div>`}
+function obar(label,count,total,ok){const p=pc(count,total);return`<div class="obar ${ok?"ok":""}"><div class="row1"><span>${esc(label)}</span><span>${count} · ${p}%</span></div><div class="tr"><i style="width:${p}%"></i></div></div>`}
+function drawDetail(R){
+  const q=Q[sel],X=R.map(r=>r.answers&&r.answers[q.id]).filter(Boolean);
+  let h=`<p class="part">${esc(PARTS[q.part])} · ${esc(q.sl)}</p><h3>${sel+1}. ${esc(q.t)}</h3>`;
+  if(isScored(q)){
+    const c=qStat(q,R),F=X.map(x=>x.first).filter(a=>a!==undefined&&a!==null),n=F.length;
+    h+=`<div class="stack" style="margin:.6rem 0 .3rem"><i class="s1" style="width:${pc(c.first,c.n)}%"></i><i class="s2" style="width:${pc(c.retry,c.n)}%"></i><i class="s3" style="width:${pc(c.explained,c.n)}%"></i></div>
+      <div class="keyrow"><span><i style="background:var(--green)"></i>din prima: ${c.first}</span><span><i style="background:var(--blue)"></i>după reluare: ${c.retry}</span><span><i style="background:var(--yellow)"></i>cu explicația: ${c.explained}</span></div>
+      <p class="hint" style="margin-top:.8rem">Ce idei au apărut la prima încercare (bun punct de plecare pentru discuție). Varianta din prezentare e marcată cu ✓.</p>`;
+    if(q.type==="single")h+=q.o.map((o,i)=>obar(o,F.filter(a=>a===i).length,n,i===q.c)).join("");
+    if(q.type==="multi")h+=q.o.map((o,i)=>obar(o,F.filter(a=>a.includes&&a.includes(i)).length,n,q.c.includes(i))).join("");
+    if(q.type==="order")h+=q.o.map((o,i)=>obar(`${i+1}. ${o}`,F.filter(a=>a[i]===i).length,n,true)).join("");
+    if(q.type==="classify")h+=q.o.map((it,i)=>obar(`${it[0]} → ${it[1]}`,F.filter(a=>a[i]===it[1]).length,n,true)).join("");
+  }
+  const A=X.map(x=>x.a).filter(Boolean);
+  if(q.type==="fill"){h+=`<p class="hint">${A.length} răspunsuri. Cuvintele alese de grupă – exact ce face și un model de limbaj: cel mai frecvent cuvânt devine „predicția”.</p>`+
+    q.o.map((s,i)=>`<p style="font-weight:600;margin:.9rem 0 0">${esc(s)}</p>`+cloud(A.map(a=>a.f&&a.f[i]))).join("")+
+    `<p style="font-weight:600;margin:.9rem 0 .4rem">${esc(q.extra)}</p><div class="quotes">${A.filter(a=>a.x).map(a=>`<blockquote>${esc(a.x)}</blockquote>`).join("")||'<p class="empty">–</p>'}</div>`}
+  if(q.type==="open")h+=`<p class="hint">${A.length} reflecții</p>`+q.o.map((s,i)=>`<p style="font-weight:600;margin:1rem 0 .4rem">${i+1}. ${esc(s)}</p><div class="quotes">${A.filter(a=>a[i]).map(a=>`<blockquote>${esc(a[i])}</blockquote>`).join("")||'<p class="empty">Încă nu sunt răspunsuri.</p>'}</div>`).join("");
+  h+=`<div class="fb show neutral" style="margin-top:1.2rem"><b>Din prezentare:</b> ${esc(q.e)}</div>`;
+  $("#detail").innerHTML=h;
+}
+
+/* ---------- parcurs individual ---------- */
+function openReport(id){
+  const r=ALL.find(x=>String(x.id)===String(id));if(!r)return;const v=learningVerdict(+r.score||0,+r.max||0);
+  $("#dlgBody").innerHTML=`<p class="part">${esc(C.MODULE)}</p><h2>${esc(r.name)}</h2>
+   <dl class="who"><dt>Email</dt><dd>${esc(r.email||"–")}</dd><dt>Ce predă</dt><dd>${esc(r.level)}</dd><dt>Discipline și clase</dt><dd>${esc(r.disc)}</dd><dt>Vechime</dt><dd>${esc(r.years)} ani</dd><dt>Din prima</dt><dd>${esc(r.score)} din ${esc(r.max)} – ${esc(v[0])}</dd></dl>
+   ${Q.map((q,i)=>{const x=(r.answers||{})[q.id]||{};const o=OUTCOME[x.out]||OUTCOME[isScored(q)?"explained":"reflect"];
+     return`<div class="ritem"><h4><span>${i+1}. ${esc(q.t)}</span><span class="tag ${o.cls}">${esc(o.label)}</span></h4><p>Răspuns: <b>${esc(answerTextQ(q,x.a))}</b></p>${x.out==="retry"||x.out==="explained"?`<p>Prima idee: ${esc(answerTextQ(q,x.first))}</p>`:""}</div>`}).join("")}`;
+  $("#dlg").showModal();
+}
+
+/* ---------- CSV ---------- */
+function csv(){
+  const head=["Nume","Email","Nivel","Discipline și clase","Vechime","Din prima","Activități","Data",...Q.map((q,i)=>`${i+1}. ${q.t}`)];
+  const cell=v=>{let s=String(v??"");if(/^[=+\-@]/.test(s))s="'"+s;return'"'+s.replace(/"/g,'""')+'"'};
+  const lines=[head.map(cell).join(",")].concat(rows().map(r=>[r.name,r.email,r.level,r.disc,r.years,r.score,r.max,r.ts,...Q.map(q=>{const x=(r.answers||{})[q.id]||{};return`${(OUTCOME[x.out]||{label:"–"}).label}: ${answerTextQ(q,x.a)}`})].map(cell).join(",")));
+  const blob=new Blob(["\ufeff"+lines.join("\n")],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="practica-cum-invata-ai.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ---------- evenimente ---------- */
+$("#qbars").onclick=e=>{const b=e.target.closest(".qbar");if(!b)return;sel=+b.dataset.i;draw();if(innerWidth<900)$("#detail").scrollIntoView({behavior:"smooth"})};
+$("#fLevel").onchange=$("#fYears").onchange=draw;
+$("#refresh").onclick=load;
+$("#tbl").onclick=e=>{const tr=e.target.closest("tr[data-id]");if(tr)openReport(tr.dataset.id)};
+$("#tbl").onkeydown=e=>{const tr=e.target.closest("tr[data-id]");if(tr&&e.key==="Enter")openReport(tr.dataset.id)};
+$("#csv").onclick=csv;
+$("#keyBtn").onclick=()=>{if(DEMO){alert("Acum vedeți date demonstrative. Vederea formatorului funcționează după ce completați ENDPOINT în assets/config.js.");return}
+  const k=prompt("Cheia formatorului (cea din Code.gs):",KEYV);if(k===null)return;KEYV=k.trim();try{sessionStorage.setItem("fped-key",KEYV)}catch(e){}load()};
+setInterval(()=>{if($("#live").checked&&!DEMO&&!document.hidden)load()},30000);
+load();
+</script>
+</body>
+</html>

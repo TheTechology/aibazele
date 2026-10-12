@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cum învață AI? · Practică · Introducere în AI pentru educație (FPED)</title>
+<meta name="description" content="Activitate interactivă pe baza prezentării „Tema 1 – Bazele AI”, pentru profesorii înscriși la curs.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Lexend:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="top"><div class="topin">
+  <div id="brand"></div>
+  <div class="prog" aria-hidden="true"><i id="bar"></i></div>
+  <span class="step" id="stepLbl"></span>
+</div></header>
+<main id="view" tabindex="-1"></main>
+<nav class="nav"><div class="navin">
+  <button class="btn" id="back" type="button">Înapoi</button>
+  <button class="btn go" id="next" type="button">Începe</button>
+</div></nav>
+<script src="assets/config.js"></script>
+<script src="assets/content.js"></script>
+<script>
+document.getElementById("brand").innerHTML=headerHTML();
+/* ===== Stare ===== */
+const C=window.APP_CONFIG,COURSE=C.MODULE,TRAINER_EMAIL=C.TRAINER_EMAIL;
+const KEY="fped-bazele-ai-v2";
+/* a = răspunsul curent, st = stare (undefined | "retry" | "done"), tries = verificări, out = rezultatul învățării, first = prima încercare, msg = mesajul afișat */
+let S=load()||{i:0,profile:{},a:{},st:{},tries:{},out:{},first:{},msg:{}};
+function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return null}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const $=(s,r=document)=>r.querySelector(s);
+const N=Q.length, TOTAL_STEPS=N+2;
+const isScored=q=>q.type!=="fill"&&q.type!=="open";
+const clone=x=>x==null?x:JSON.parse(JSON.stringify(x));
+const shuffleOrder=n=>{const a=[...Array(n).keys()];do{for(let i=n-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}}while(a.every((v,i)=>v===i));return a};
+const isRight=q=>{const[g,m]=scoreQ(q,S.a[q.id]);return m>0&&g===m};
+function correctAnswer(q){
+  if(q.type==="single")return q.c;
+  if(q.type==="multi")return q.c.slice();
+  if(q.type==="order")return q.o.map((_,i)=>i);
+  if(q.type==="classify"){const a={};q.o.forEach((it,i)=>a[i]=it[1]);return a}
+}
+/* părțile deja potrivite (se marchează în verde și rămân fixe la reluare) */
+function keepSet(q){
+  if(S.st[q.id]!=="retry")return new Set();
+  const a=S.a[q.id],k=new Set();
+  if(q.type==="classify")q.o.forEach((it,i)=>{if(a&&a[i]===it[1])k.add(i)});
+  if(q.type==="order")(a||[]).forEach((v,i)=>{if(v===i)k.add(i)});
+  return k;
+}
+function answered(q){
+  const a=S.a[q.id];
+  if(q.type==="single")return a!==undefined&&a!==null;
+  if(q.type==="multi")return a&&a.length>0;
+  if(q.type==="order")return !!a;
+  if(q.type==="classify")return a&&q.o.every((_,i)=>a[i]);
+  if(q.type==="fill")return a&&a.f&&a.f.every(x=>x&&x.trim())&&a.x&&a.x.trim();
+  if(q.type==="open")return a&&q.o.every((_,i)=>a[i]&&a[i].trim().length>1);
+}
+
+/* ===== Randare ===== */
+function render(){
+  const v=$("#view");
+  $("#bar").style.width=(S.i/(TOTAL_STEPS-1)*100)+"%";
+  $("#back").style.visibility=S.i>0&&S.i<TOTAL_STEPS-1?"visible":"hidden";
+  if(S.i===0)renderProfile(v);
+  else if(S.i<=N)renderQ(v,Q[S.i-1]);
+  else renderReport(v);
+  $("#stepLbl").textContent=S.i===0?"Date personale":S.i<=N?`Activitatea ${S.i} din ${N}`:"Parcursul dumneavoastră";
+  $(".nav").style.display=S.i>N?"none":"";
+  v.focus({preventScroll:true});window.scrollTo({top:0});
+}
+function renderProfile(v){
+  const p=S.profile;
+  v.innerHTML=`
+  <p class="part">${esc(C.MODULE)}</p>
+  <h1>Cum învață AI? Practică pe baza prezentării</h1>
+  <p class="lead">Parcurgeți ${N} activități scurte, construite pe prezentarea de azi. Nu e un test: dacă un răspuns nu se potrivește din prima, primiți un indiciu și mai încercați. La final vedeți ce ați învățat la fiecare activitate.</p>
+  <div class="facts"><div><b>${N}</b><span>activități, una pe ecran</span></div><div><b>10–12 min</b><span>durata estimată</span></div><div><b>Fără grabă</b><span>puteți relua oricând, cu indicii</span></div></div>
+  <div class="card">
+   <div class="f" data-f="name"><label for="pName">Numele <span class="req">*</span></label><input type="text" id="pName" autocomplete="name" value="${esc(p.name)}"><p class="err">Scrieți numele, ca formatorul să vă recunoască parcursul.</p></div>
+   <div class="f" data-f="email"><label for="pEmail">Email</label><input type="email" id="pEmail" autocomplete="email" value="${esc(p.email)}"><p class="err">Adresa de email nu pare corectă.</p></div>
+   <div class="f" data-f="level"><span class="lbl" id="lvlL">Ce predați? <span class="req">*</span></span><div class="choices" role="radiogroup" aria-labelledby="lvlL" id="pLevel">${LEVELS.map((l,i)=>`<button type="button" class="ch" role="radio" aria-checked="${p.level===l}" data-v="${esc(l)}"><span class="mk"></span><span>${esc(l)}</span></button>`).join("")}</div><p class="err">Alegeți o variantă.</p></div>
+   <div class="f" data-f="disc"><label for="pDisc">Disciplina/disciplinele predate și clasele <span class="req">*</span></label><input type="text" id="pDisc" placeholder="Exemplu: matematică, clasele V–VIII." value="${esc(p.disc)}"><p class="err">Completați disciplina și clasele.</p></div>
+   <div class="f" data-f="years"><span class="lbl" id="yrsL">De câți ani predați? <span class="req">*</span></span><div class="choices" role="radiogroup" aria-labelledby="yrsL" id="pYears">${YEARS.map(y=>`<button type="button" class="ch" role="radio" aria-checked="${p.years===y}" data-v="${esc(y)}"><span class="mk"></span><span>${esc(y)}</span></button>`).join("")}</div><p class="err">Alegeți o variantă.</p></div>
+   <div class="f" data-f="consent"><label class="consent"><input type="checkbox" id="pCons" ${p.consent?"checked":""}><span>Sunt de acord ca datele de mai sus și răspunsurile mele să fie transmise formatorului ${esc(C.TRAINER)}, doar pentru evaluarea activității din cadrul cursului. Pagina publică de rezultate arată numai date agregate, fără nume și fără email. <span class="req">*</span></span></label><p class="err">Bifați acordul ca să continuați.</p></div>
+  </div>`;
+  ["pLevel","pYears"].forEach(id=>$("#"+id).onclick=e=>{const b=e.target.closest(".ch");if(!b)return;$("#"+id).querySelectorAll(".ch").forEach(x=>x.setAttribute("aria-checked",x===b));S.profile[id==="pLevel"?"level":"years"]=b.dataset.v;b.closest(".f").classList.remove("bad");save()});
+  $("#pCons").onchange=e=>{S.profile.consent=e.target.checked;e.target.closest(".f").classList.remove("bad");save()};
+  [["pName","name"],["pEmail","email"],["pDisc","disc"]].forEach(([id,k])=>$("#"+id).oninput=e=>{S.profile[k]=e.target.value;e.target.closest(".f").classList.remove("bad");save()});
+  $("#next").textContent="Începe activitățile";$("#next").className="btn go";
+}
+function validProfile(){
+  const p=S.profile,bad=[];
+  if(!p.name||p.name.trim().length<2)bad.push("name");
+  if(p.email&&p.email.trim()&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim()))bad.push("email");
+  if(!p.level)bad.push("level");
+  if(!p.disc||p.disc.trim().length<2)bad.push("disc");
+  if(!p.years)bad.push("years");
+  if(!p.consent)bad.push("consent");
+  document.querySelectorAll(".f").forEach(f=>f.classList.toggle("bad",bad.includes(f.dataset.f)));
+  if(bad.length)$(`.f[data-f="${bad[0]}"]`).scrollIntoView({behavior:"smooth",block:"center"});
+  return !bad.length;
+}
+
+function renderQ(v,q){
+  const st=S.st[q.id],done=st==="done",keep=keepSet(q),reveal=S.out[q.id]==="explained";
+  let body="";
+  if(q.type==="single"||q.type==="multi"){
+    const a=S.a[q.id],sel=i=>q.type==="single"?a===i:(a||[]).includes(i);
+    body=`<div class="choices ${done?"locked":""}" role="${q.type==="single"?"radiogroup":"group"}">${q.o.map((o,i)=>{
+      let cls="ch"+(q.type==="multi"?" multi":"");
+      if(done&&sel(i))cls+=" right";
+      return`<button type="button" class="${cls}" role="${q.type==="single"?"radio":"checkbox"}" aria-checked="${sel(i)}" data-i="${i}" ${done?"disabled":""}><span class="mk"></span><span>${esc(o)}</span></button>`}).join("")}</div>`;
+  }
+  if(q.type==="order"){
+    if(!S.a[q.id]){S.a[q.id]=shuffleOrder(q.o.length);save()}
+    const a=S.a[q.id];
+    body=`<ol class="ord">${a.map((k,pos)=>`<li class="${done||keep.has(pos)?"keep":""}"><span class="n">${pos+1}</span><span class="t">${esc(q.o[k])}</span>${done?"":`<span class="mv"><button type="button" data-up="${pos}" aria-label="mută mai sus" ${pos===0?"disabled":""}>▲</button><button type="button" data-dn="${pos}" aria-label="mută mai jos" ${pos===a.length-1?"disabled":""}>▼</button></span>`}</li>`).join("")}</ol>
+    ${done?"":'<p class="hint">Folosiți săgețile ca să mutați etapele.</p>'}`;
+  }
+  if(q.type==="classify"){
+    const a=S.a[q.id]||{};
+    body=q.o.map((it,i)=>{const fixed=done||keep.has(i);return`<div class="cl ${fixed?"keep":""}"><p>${esc(it[0])}</p><div class="seg">${q.cats.map(c=>
+      `<button type="button" class="${fixed&&a[i]===c?"right":""}" aria-pressed="${a[i]===c}" data-i="${i}" data-c="${esc(c)}" ${fixed?"disabled":""}>${esc(c)}</button>`).join("")}</div></div>`}).join("");
+  }
+  if(q.type==="fill"){
+    const a=S.a[q.id]||{f:[],x:""};
+    body=`<div class="fill">${q.o.map((s,i)=>`<div><p class="s">${esc(s)}</p><input type="text" data-f="${i}" value="${esc(a.f[i])}" placeholder="Cuvântul lipsă" aria-label="${esc(s)}" ${done?"disabled":""}></div>`).join("")}
+     <div><p class="s">${esc(q.extra)}</p><textarea data-x placeholder="Scrieți pe scurt" ${done?"disabled":""}>${esc(a.x)}</textarea></div></div>`;
+  }
+  if(q.type==="open"){
+    const a=S.a[q.id]||{};
+    body=`<div class="fill">${q.o.map((s,i)=>`<div><p class="s">${i+1}. ${esc(s)}</p><textarea data-o="${i}" placeholder="Răspunsul dumneavoastră">${esc(a[i])}</textarea></div>`).join("")}</div>`;
+  }
+  let fb="";
+  if(done){
+    const m=S.msg[q.id]||"";
+    fb=`<div class="fb show ${reveal||!isScored(q)?"neutral":"ok"}" role="status"><b>${esc(m)}</b> ${esc(q.e)}</div>`;
+  }else if(st==="retry"){
+    const tries=S.tries[q.id]||0;
+    fb=`<div class="fb show hint" role="status"><b>${esc(S.msg[q.id]||"Încă puțin!")}</b> ${esc(progressNote(q))} ${esc(HINTS[q.id]||"")}
+      <div class="acts">${tries>=2?'<button class="btn" type="button" id="explain">Arată-mi explicația</button>':""}</div></div>`;
+  }
+  v.innerHTML=`<p class="part">${esc(PARTS[q.part])} <span class="slide">· ${esc(q.sl)}</span></p><h2>${esc(q.t)}</h2>${q.type==="multi"&&!done?'<p class="hint" style="margin:-.3rem 0 1rem">Pot fi mai multe răspunsuri potrivite.</p>':""}${body}${fb}<p class="err" id="qErr" style="margin-top:1rem">${q.type==="fill"||q.type==="open"?"Completați toate câmpurile ca să continuați.":"Alegeți un răspuns ca să continuați."}</p>`;
+  bindQ(v,q,done);
+  const ex=$("#explain");if(ex)ex.onclick=()=>explain(q);
+  const nb=$("#next");
+  if(done||q.type==="open"){nb.textContent=S.i===N?"Vezi parcursul":"Continuă";nb.className="btn go"}
+  else if(q.type==="fill"){nb.textContent="Trimite răspunsul";nb.className="btn go check"}
+  else{nb.textContent=st==="retry"?"Verifică din nou":"Verifică";nb.className="btn go check"}
+}
+/* ce e deja bine, spus fără a marca greșeli */
+function progressNote(q){
+  const a=S.a[q.id];
+  if(q.type==="classify"){const k=q.o.filter((it,i)=>a&&a[i]===it[1]).length;return k?`${k} din ${q.o.length} afirmații sunt deja la locul lor (marcate cu verde). Mai gândiți-vă la celelalte.`:"Mai gândiți-vă la încadrări."}
+  if(q.type==="order"){const k=(a||[]).filter((v,i)=>v===i).length;return k?`${k} din ${q.o.length} etape sunt deja la locul lor (marcate cu verde).`:"Mai încercați o ordine."}
+  if(q.type==="multi"){const k=(a||[]).filter(i=>q.c.includes(i)).length;return k?`Ați găsit deja ${k} din ${q.c.length} variante potrivite. Mai citiți o dată toate variantele.`:"Mai citiți o dată toate variantele."}
+  return"";
+}
+function explain(q){
+  S.a[q.id]=correctAnswer(q);S.st[q.id]="done";S.out[q.id]="explained";
+  S.msg[q.id]="Iată cum arată în prezentare.";save();renderQ($("#view"),q);
+}
+function bindQ(v,q,done){
+  v.onclick=null;v.oninput=null;
+  if(done)return;
+  const hideErr=()=>{$("#qErr").style.display="none"};
+  if(q.type==="single"||q.type==="multi")v.querySelector(".choices").onclick=e=>{const b=e.target.closest(".ch");if(!b)return;const i=+b.dataset.i;
+    if(q.type==="single")S.a[q.id]=i;else{const s=new Set(S.a[q.id]||[]);s.has(i)?s.delete(i):s.add(i);S.a[q.id]=[...s].sort()}
+    save();hideErr();renderQ(v,q)};
+  if(q.type==="order")v.querySelector(".ord").onclick=e=>{const b=e.target.closest("button");if(!b)return;const a=S.a[q.id];
+    const up=b.dataset.up!==undefined,p=up?+b.dataset.up:+b.dataset.dn,t=up?p-1:p+1;[a[p],a[t]]=[a[t],a[p]];save();renderQ(v,q);
+    const nb=v.querySelector(`[data-${up?"up":"dn"}="${t}"]`);if(nb&&!nb.disabled)nb.focus()};
+  if(q.type==="classify")v.onclick=e=>{const b=e.target.closest(".seg button");if(!b||b.disabled)return;const a=S.a[q.id]||{};a[b.dataset.i]=b.dataset.c;S.a[q.id]=a;save();hideErr();
+    b.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b))};
+  if(q.type==="fill")v.oninput=e=>{const a=S.a[q.id]||{f:[],x:""};if(e.target.dataset.f!==undefined)a.f[+e.target.dataset.f]=e.target.value;if(e.target.hasAttribute("data-x"))a.x=e.target.value;S.a[q.id]=a;save();hideErr()};
+  if(q.type==="open")v.oninput=e=>{const a=S.a[q.id]||{};if(e.target.dataset.o!==undefined)a[e.target.dataset.o]=e.target.value;S.a[q.id]=a;save();hideErr()};
+}
+/* verificare: fără „greșit”, doar încurajare și reluare */
+function check(q){
+  S.tries[q.id]=(S.tries[q.id]||0)+1;
+  if(S.tries[q.id]===1)S.first[q.id]=clone(S.a[q.id]);
+  if(isRight(q)){
+    S.st[q.id]="done";S.out[q.id]=S.tries[q.id]===1?"first":"retry";
+    S.msg[q.id]=S.tries[q.id]===1?pick(PRAISE_FIRST):pick(PRAISE_RETRY)+" Reluarea face parte din învățare, exact cum se ajustează și modelul (slide 11).";
+  }else{S.st[q.id]="retry";S.msg[q.id]=pick(NUDGE)}
+  save();renderQ($("#view"),q);
+  const f=$(".fb");if(f)f.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+/* ===== Parcursul (raportul) ===== */
+function summary(){
+  const sc=Q.filter(isScored),c={first:0,retry:0,explained:0};
+  sc.forEach(q=>{const o=S.out[q.id];if(c[o]!==undefined)c[o]++});
+  const per={1:[0,0],2:[0,0]};sc.forEach(q=>{per[q.part][1]++;if(S.out[q.id]==="first")per[q.part][0]++});
+  const total=sc.length,pct=total?Math.round(c.first/total*100):0;
+  return{c,total,pct,per,lvl:learningVerdict(c.first,total)};
+}
+function outcomeOf(q){return isScored(q)?(S.out[q.id]||"explained"):"reflect"}
+function stamp(){const d=new Date(S.doneAt||Date.now());return d.toLocaleDateString("ro-RO",{day:"numeric",month:"long",year:"numeric"})+", "+d.toLocaleTimeString("ro-RO",{hour:"2-digit",minute:"2-digit"})}
+function plainReport(){
+  const s=summary(),p=S.profile;
+  let t=`PARCURS DE ÎNVĂȚARE – ${C.COURSE}\n${C.MODULE} · ${C.GROUP}\nFormator: ${C.TRAINER}\n${stamp()}\n\nNume: ${p.name}\nEmail: ${p.email||"–"}\nCe predă: ${p.level}\nDiscipline și clase: ${p.disc}\nVechime: ${p.years} ani\n\n`+
+    `Activități parcurse: ${N} din ${N}\nDin prima încercare: ${s.c.first} · După reluare: ${s.c.retry} · Cu ajutorul explicației: ${s.c.explained}\n${s.lvl[0]} ${s.lvl[1]}\n\n`;
+  Q.forEach((q,i)=>{t+=`${i+1}. ${q.t} [${q.sl}] – ${OUTCOME[outcomeOf(q)].label}\n   Răspuns: ${answerTextQ(q,S.a[q.id])}\n\n`});
+  return t;
+}
+function ring(){const r=54,c=2*Math.PI*r;return`<svg class="ring" viewBox="0 0 130 130" role="img" aria-label="${N} din ${N} activități parcurse"><circle cx="65" cy="65" r="${r}" fill="none" stroke="var(--green)" stroke-width="12"/><text x="65" y="66" text-anchor="middle" font-family="Bricolage Grotesque, sans-serif" font-weight="800" font-size="30" fill="var(--ink)">${N}/${N}</text><text x="65" y="86" text-anchor="middle" font-size="11" fill="var(--soft)">activități</text></svg>`}
+function renderReport(v){
+  if(!S.doneAt){S.doneAt=Date.now();save()}
+  const s=summary(),p=S.profile,T=s.total||1;
+  v.innerHTML=`
+  <p class="part">${esc(C.MODULE)} · ${esc(stamp())}</p>
+  <h1>Felicitări, ${esc(p.name.split(" ")[0])}!</h1>
+  <div class="card">
+   <div class="score">${ring()}<div class="verdict"><b>${esc(s.lvl[0])}</b>${esc(s.lvl[1])}</div></div>
+   <div class="stack" aria-hidden="true"><i class="s1" style="width:${s.c.first/T*100}%"></i><i class="s2" style="width:${s.c.retry/T*100}%"></i><i class="s3" style="width:${s.c.explained/T*100}%"></i></div>
+   <div class="keyrow"><span><i style="background:var(--green)"></i>Din prima încercare: <b>${s.c.first}</b></span><span><i style="background:var(--blue)"></i>După reluare: <b>${s.c.retry}</b></span><span><i style="background:var(--yellow)"></i>Cu ajutorul explicației: <b>${s.c.explained}</b></span><span>Reflecții: <b>${N-s.total}</b></span></div>
+   <dl class="who" style="margin-top:1rem"><dt>Nume</dt><dd>${esc(p.name)}</dd><dt>Email</dt><dd>${esc(p.email||"–")}</dd><dt>Ce predați</dt><dd>${esc(p.level)}</dd><dt>Discipline și clase</dt><dd>${esc(p.disc)}</dd><dt>Vechime</dt><dd>${esc(p.years)} ani</dd></dl>
+  </div>
+  <div class="actions noprint">
+   <button class="btn go" id="rMail" type="button" style="margin-left:0">Trimite parcursul pe email</button>
+   <button class="btn" id="rCopy" type="button">Copiază parcursul</button>
+   <a class="btn" href="rezultate.html" style="text-decoration:none;color:inherit">Vezi practica grupei</a>
+   <button class="btn" id="rPrint" type="button">Salvează ca PDF</button>
+  </div>
+  <p class="msg noprint" id="rMsg" role="status"></p>
+  <div class="noprint" id="sendBox"></div>
+  <h2 style="margin-top:1.5rem">Ce ați învățat, activitate cu activitate</h2>
+  <div class="card">${Q.map((q,i)=>{const o=OUTCOME[outcomeOf(q)];
+    return`<div class="ritem"><h4><span>${i+1}. ${esc(q.t)}</span><span class="tag ${o.cls}">${esc(o.label)}</span></h4><p>Răspunsul dumneavoastră: <b>${esc(answerTextQ(q,S.a[q.id]))}</b></p><p>${esc(q.e)}</p></div>`}).join("")}</div>
+  <div class="actions noprint"><button class="btn" id="rRestart" type="button">Parcurge din nou</button></div>
+  <p class="foot">${esc(C.COURSE)} · ${esc(C.GROUP)} · ${esc(C.PERIOD)}<br>Formator: ${esc(C.TRAINER)} · activitate construită pe prezentarea „Tema 1 – Bazele AI”.</p>`;
+  const msg=t=>{$("#rMsg").textContent=t;setTimeout(()=>{$("#rMsg").textContent=""},4000)};
+  $("#rCopy").onclick=()=>copy(plainReport(),()=>msg("Parcursul a fost copiat. Îl puteți lipi în chatul cursului sau într-un email."));
+  $("#rMail").onclick=()=>{
+    let body=plainReport();if(body.length>1800)body=body.slice(0,1800)+"\n[…scurtat; folosiți „Copiază parcursul” pentru varianta completă]";
+    const a=document.createElement("a");a.href=`mailto:${encodeURIComponent(TRAINER_EMAIL)}?subject=${encodeURIComponent("Parcurs Bazele AI – "+p.name)}&body=${encodeURIComponent(body)}`;a.target="_blank";a.rel="noopener";document.body.appendChild(a);a.click();a.remove();
+    msg("Se deschide aplicația de email. Dacă nu se deschide, folosiți „Copiază parcursul”.")};
+  $("#rPrint").onclick=()=>{try{window.print()}catch(e){msg("Salvarea ca PDF nu este disponibilă aici. Folosiți „Copiază parcursul”.")}};
+  $("#rRestart").onclick=()=>{if(confirm("Parcurgeți activitățile din nou? Datele personale rămân completate.")){S={i:1,profile:S.profile,a:{},st:{},tries:{},out:{},first:{},msg:{}};save();render()}};
+  submitResult();
+}
+
+/* ===== Trimiterea către tabelul formatorului ===== */
+function uid(){return (crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2))}
+async function submitResult(){
+  const box=$("#sendBox");if(!box||!C.ENDPOINT)return;
+  const ok='<span class="sent">Parcursul dumneavoastră a fost adăugat la practica grupei. Mulțumim!</span>';
+  if(S.sentId){box.innerHTML=ok;return}
+  box.innerHTML='<span class="sent">Se transmite parcursul…</span>';
+  const s=summary(),id=uid(),answers={};
+  Q.forEach(q=>{answers[q.id]={a:S.a[q.id]??null,first:S.first[q.id]??null,tries:S.tries[q.id]||0,out:outcomeOf(q)}});
+  const payload={id,ts:new Date(S.doneAt).toISOString(),profile:{name:S.profile.name.trim(),email:(S.profile.email||"").trim(),level:S.profile.level,disc:S.profile.disc.trim(),years:S.profile.years},
+    score:s.c.first,max:s.total,pct:s.pct,p1:s.per[1][0],p1max:s.per[1][1],p2:s.per[2][0],p2max:s.per[2][1],answers};
+  try{
+    await fetch(C.ENDPOINT,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+    S.sentId=id;save();box.innerHTML=ok;
+  }catch(e){
+    box.innerHTML='<span class="sent">Conexiunea pare întreruptă. Parcursul este păstrat aici.</span> <button class="btn" type="button" id="retry">Trimite din nou</button>';
+    $("#retry").onclick=submitResult;
+  }
+}
+function copy(t,ok){
+  const fb=()=>{const a=document.createElement("textarea");a.value=t;a.style.position="fixed";a.style.opacity="0";document.body.appendChild(a);a.select();try{document.execCommand("copy");ok()}catch(e){}a.remove()};
+  try{navigator.clipboard.writeText(t).then(ok,fb)}catch(e){fb()}
+}
+
+/* ===== Navigare ===== */
+$("#next").onclick=()=>{
+  if(S.i===0){if(!validProfile())return;S.i=1;save();render();return}
+  const q=Q[S.i-1];
+  if(S.st[q.id]==="done"||(q.type==="open"&&answered(q))){
+    if(q.type==="open"){S.st[q.id]="done";S.out[q.id]="reflect";save()}
+    S.i++;save();render();return}
+  if(!answered(q)){$("#qErr").style.display="block";return}
+  if(q.type==="fill"){S.st[q.id]="done";S.out[q.id]="reflect";S.msg[q.id]="Mulțumim!";save();renderQ($("#view"),q);return}
+  check(q);
+};
+$("#back").onclick=()=>{if(S.i>0){S.i--;save();render()}};
+render();
+</script>
+</body>
+</html>
